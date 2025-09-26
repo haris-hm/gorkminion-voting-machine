@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -22,7 +22,10 @@ function findCommandFile(commandsDir, commandName) {
 		if (entry.isDirectory()) {
 			const found = findCommandFile(entryPath, commandName);
 			if (found) return found;
-		} else if (entry.isFile() && entry.name === `${commandName}.js`) {
+		} else if (
+			entry.isFile() &&
+			entry.name.toLowerCase() === `${commandName}.js`
+		) {
 			return entryPath;
 		}
 	}
@@ -33,18 +36,22 @@ async function execute(interaction) {
 	if (interaction.user.id !== ADMIN_USER) {
 		return interaction.reply({
 			content: "You do not have permission to use this command.",
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 	}
 
 	const commandName = interaction.options
 		.getString("command", true)
-		.toLowerCase();
+		.toLowerCase()
+		.replace("_", "");
 	const commandsDir = path.join(__dirname, "..");
 	const commandFilePath = findCommandFile(commandsDir, commandName);
 
 	if (!commandFilePath) {
-		return interaction.reply(`There is no command with name \`${commandName}\`!`);
+		return interaction.reply({
+			content: `There is no command with name \`${commandName}\`!`,
+			flags: MessageFlags.Ephemeral,
+		});
 	}
 
 	delete require.cache[require.resolve(commandFilePath)];
@@ -52,17 +59,15 @@ async function execute(interaction) {
 	try {
 		const newCommand = require(commandFilePath);
 		interaction.client.commands.set(newCommand.data.name, newCommand);
-
 		await interaction.reply({
 			content: `Command \`${newCommand.data.name}\` was reloaded!`,
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 	} catch (error) {
 		console.error(error);
-
 		await interaction.reply({
 			content: `There was an error while reloading a command \`${command.data.name}\`:\n\`${error.message}\``,
-			ephemeral: true,
+			flags: MessageFlags.Ephemeral,
 		});
 	}
 }
