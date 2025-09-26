@@ -1,0 +1,16 @@
+{
+    "arrowSpacing": true,
+    "braceStyle": "stroustrup",
+    "commaDangle": "always-multiline",
+    "commaSpacing": true,
+    "curly": true,
+    "tabWidth": 1,
+    "useTabs": true,
+    "singleQuote": false,
+    "semi": true,
+    "quoteProps": "as-needed",
+    "trailingComma": "all",
+    "printWidth": 80,
+    "proseWrap": "preserve",
+    "endOfLine": "lf"
+}
