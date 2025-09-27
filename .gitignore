@@ -1,4 +1,5 @@
 .env
+*.sqlite
 *.sqlite*
 config.json
 node_modules/

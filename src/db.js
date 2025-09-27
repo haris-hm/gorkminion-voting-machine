@@ -15,7 +15,12 @@ db.transaction(() => {
 			`
 			CREATE TABLE IF NOT EXISTS ballots (
 				id TEXT PRIMARY KEY,
-				options TEXT
+				options TEXT,
+				message_id TEXT,
+				channel_id TEXT,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				closed INTEGER DEFAULT 0,
+				ttl INTEGER DEFAULT 1440
 			)
 			`,
 		)

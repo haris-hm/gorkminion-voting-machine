@@ -77,6 +77,12 @@ function getCurrentPointValue(ballotId, userId) {
 
 function recordVote(ballotId, postId, userId) {
 	const pointsValue = getCurrentPointValue(ballotId, userId);
+	if (pointsValue <= 0) return false;
+
+	const options = getOptionsAvailable(ballotId, userId);
+	if (!options.find((option) => parseInt(option.id) === parseInt(postId))) {
+		return false;
+	}
 
 	db
 		.prepare(
@@ -87,7 +93,7 @@ function recordVote(ballotId, postId, userId) {
 		)
 		.run(pointsValue, ballotId, postId);
 
-	const newOptions = getOptionsAvailable(ballotId, userId).filter(
+	const newOptions = options.filter(
 		(option) => parseInt(option.id) !== parseInt(postId),
 	);
 
@@ -101,6 +107,7 @@ function recordVote(ballotId, postId, userId) {
 		.run(JSON.stringify(newOptions), ballotId, userId);
 
 	incrementUserVotes(ballotId, userId);
+	return true;
 }
 
 async function handleVoteInteraction(ballotId, userId, interaction) {
@@ -160,13 +167,25 @@ async function startVotingDialogTree(ballotId, interaction) {
 		return;
 	}
 
-	const introduction = new TextDisplayBuilder().setContent(
-		`## Voting Process\nYou can vote for up to **${startingVotesAvailable}** options in this ballot. You will rank your choices from 1 to ${startingVotesAvailable}. Your number 1 choice will receive ${startingVotesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point.\n\nWhen you're ready, please click the start button below to begin the voting process.`,
-	);
+	const alreadyStartedVoting = startingUserVotes > 0;
+
+	let introductionContent = `
+## Voting Process
+
+You can vote for up to **${startingVotesAvailable}** options in this ballot. You will rank your choices from 1 to ${startingVotesAvailable}. Your number 1 choice will receive ${startingVotesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point.
+
+When you're ready, please click the start button below to begin the voting process.
+	`;
+
+	if (alreadyStartedVoting) {
+		introductionContent += `\n-# **Note:** *You have already started voting. Clicking start again will resume your voting process. You have used **${startingUserVotes}** out of **${startingVotesAvailable}** votes.*`;
+	}
+
+	const introduction = new TextDisplayBuilder().setContent(introductionContent);
 
 	const startButton = new ButtonBuilder()
 		.setCustomId(`startVoting:${ballotId}`)
-		.setLabel("Start Voting")
+		.setLabel(alreadyStartedVoting ? "Resume Voting" : "Start Voting")
 		.setStyle("Primary")
 		.setEmoji("✅");
 
@@ -190,14 +209,31 @@ async function startVotingDialogTree(ballotId, interaction) {
 				await handleVoteInteraction(ballotId, userId, i);
 			} else if (i.customId.startsWith("voteOption")) {
 				const optionId = i.customId.split(":")[1];
-				recordVote(ballotId, optionId, interaction.user.id);
+				const result = recordVote(ballotId, optionId, interaction.user.id);
+
+				if (!result) {
+					await i.update({
+						components: [
+							new TextDisplayBuilder().setContent(
+								"Nice try! I know, I know, literally 1984 or whatever. 🤓",
+							),
+						],
+						flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
+					});
+					collector.stop();
+					return;
+				}
+
 				await handleVoteInteraction(ballotId, userId, i);
 			}
 			collector.resetTimer();
 		} catch (err) {
 			console.error("Error handling interaction:", err);
 			if (!i.replied && !i.deferred) {
-				await i.reply({ content: "An error occurred.", ephemeral: true });
+				await i.reply({
+					content: "An error occurred.",
+					flags: MessageFlags.Ephemeral,
+				});
 			}
 		}
 	});

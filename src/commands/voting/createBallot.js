@@ -29,6 +29,20 @@ export const data = new SlashCommandBuilder()
 			.setName("year")
 			.setDescription("The year to look for submissions for.")
 			.setRequired(true),
+	)
+	.addBooleanOption((option) =>
+		option
+			.setName("force")
+			.setDescription("If there is already an existing ballot, overwrite it.")
+			.setRequired(false),
+	)
+	.addIntegerOption((option) =>
+		option
+			.setName("ttl")
+			.setDescription(
+				"Time (in minutes) until the ballot automatically closes and tabulates the results.",
+			)
+			.setRequired(false),
 	);
 
 async function getPostsFromThreads(threads) {
@@ -72,11 +86,17 @@ async function getPostsFromThreads(threads) {
 	return posts;
 }
 
-function updateDatabase(ballotId, posts) {
+function updateDatabase(ballotId, posts, messageId, channelId, ttl) {
 	const upsertBallot = db.prepare(`
-        INSERT INTO ballots (id, options)
-        VALUES (?, ?)
-        ON CONFLICT(id) DO UPDATE SET options = excluded.options
+        INSERT INTO ballots (id, options, message_id, channel_id, created_at, ttl)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO 
+			UPDATE SET options = excluded.options, 
+					   message_id = excluded.message_id, 
+					   channel_id = excluded.channel_id, 
+					   created_at = excluded.created_at, 
+					   ttl = excluded.ttl, 
+					   closed = 0
     `);
 	const insertVote = db.prepare(`
         INSERT OR IGNORE INTO votes (ballot_id, post_id, points)
@@ -84,7 +104,14 @@ function updateDatabase(ballotId, posts) {
     `);
 
 	db.transaction(() => {
-		upsertBallot.run(ballotId, JSON.stringify(posts));
+		upsertBallot.run(
+			ballotId,
+			JSON.stringify(posts),
+			messageId,
+			channelId,
+			new Date().toISOString(),
+			ttl,
+		);
 
 		for (const post of posts) {
 			insertVote.run(ballotId, post.id);
@@ -160,6 +187,9 @@ export async function execute(interaction) {
 		});
 	}
 
+	const ttl = interaction.options.getInteger("ttl") * 60 * 1000 || 60 * 60 * 24;
+	const force = interaction.options.getBoolean("force") || false;
+
 	const month = interaction.options.getString("month", true);
 	const year = interaction.options.getInteger("year", true);
 	const tagName = `${month} ${year}`;
@@ -167,6 +197,18 @@ export async function execute(interaction) {
 	const desiredTag = channel.availableTags.find((tag) => tag.name === tagName);
 	const desiredTagId = desiredTag ? desiredTag.id : null;
 	const ballotId = tagName.toLowerCase().replace(" ", "-");
+
+	if (!force) {
+		const existingBallot = db
+			.prepare("SELECT id FROM ballots WHERE id = ?")
+			.get(ballotId);
+		if (existingBallot) {
+			return interaction.reply({
+				content: `A ballot for ${tagName} already exists. Use the \`force\` option to overwrite it.`,
+				flags: MessageFlags.Ephemeral,
+			});
+		}
+	}
 
 	if (!desiredTagId) {
 		return interaction.reply({
@@ -183,11 +225,13 @@ export async function execute(interaction) {
 	);
 	const posts = await getPostsFromThreads(filteredThreads);
 
-	updateDatabase(ballotId, posts);
-
 	await interaction.reply({
 		flags: [MessageFlags.IsComponentsV2],
 		components: buildBallotDisplay(month, year, ballotId, posts),
 		allowedMentions: { parse: [] },
 	});
+
+	const replyMessage = await interaction.fetchReply();
+
+	updateDatabase(ballotId, posts, replyMessage.id, replyMessage.channelId, ttl);
 }
