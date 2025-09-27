@@ -73,50 +73,23 @@ async function getPostsFromThreads(threads) {
 }
 
 function updateDatabase(ballotId, posts) {
-	db
-		.prepare(
-			`
-			CREATE TABLE IF NOT EXISTS ballots (
-				id TEXT PRIMARY KEY,
-				options TEXT
-			)
-			`,
-		)
-		.run();
+	const upsertBallot = db.prepare(`
+        INSERT INTO ballots (id, options)
+        VALUES (?, ?)
+        ON CONFLICT(id) DO UPDATE SET options = excluded.options
+    `);
+	const insertVote = db.prepare(`
+        INSERT OR IGNORE INTO votes (ballot_id, post_id, points)
+        VALUES (?, ?, 0)
+    `);
 
-	for (const post of posts) {
-		db
-			.prepare(
-				`
-				CREATE TABLE IF NOT EXISTS votes (
-					ballot_id TEXT,
-					post_id INTEGER,
-					points INTEGER DEFAULT 0,
-					PRIMARY KEY (ballot_id, post_id),
-					FOREIGN KEY (ballot_id) REFERENCES ballots(id)
-				)
-				`,
-			)
-			.run();
+	db.transaction(() => {
+		upsertBallot.run(ballotId, JSON.stringify(posts));
 
-		db
-			.prepare(
-				`
-				INSERT OR IGNORE INTO votes (ballot_id, post_id, points)
-				VALUES (?, ?, 0)
-				`,
-			)
-			.run(ballotId, post.id);
-	}
-
-	db
-		.prepare(
-			`
-			INSERT OR REPLACE INTO ballots (id, options)
-			VALUES (?, ?)
-			`,
-		)
-		.run(ballotId, JSON.stringify(posts));
+		for (const post of posts) {
+			insertVote.run(ballotId, post.id);
+		}
+	})();
 }
 
 function buildPostsDisplay(posts) {
