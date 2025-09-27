@@ -10,6 +10,7 @@ import {
 	SeparatorSpacingSize,
 } from "discord.js";
 import dotenv from "dotenv";
+import db from "../../db.js";
 
 dotenv.config();
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
@@ -33,8 +34,12 @@ export const data = new SlashCommandBuilder()
 async function getPostsFromThreads(threads) {
 	const posts = [];
 
-	for (const thread of threads.values()) {
+	const threadsArray = Array.from(threads.values());
+
+	for (let i = 0; i < threadsArray.length; i++) {
+		const thread = threadsArray[i];
 		let imageUrl;
+
 		try {
 			const starterMessage = await thread.fetchStarterMessage();
 			if (!starterMessage) continue;
@@ -56,6 +61,7 @@ async function getPostsFromThreads(threads) {
 		}
 
 		posts.push({
+			id: i + 1,
 			author: thread.ownerId,
 			title: thread.name,
 			threadUrl: `https://discord.com/channels/${thread.guild.id}/${thread.id}`,
@@ -66,10 +72,59 @@ async function getPostsFromThreads(threads) {
 	return posts;
 }
 
+function updateDatabase(ballotId, posts) {
+	db
+		.prepare(
+			`
+			CREATE TABLE IF NOT EXISTS ballots (
+				id TEXT PRIMARY KEY,
+				options TEXT
+			)
+			`,
+		)
+		.run();
+
+	for (const post of posts) {
+		db
+			.prepare(
+				`
+				CREATE TABLE IF NOT EXISTS votes (
+					ballot_id TEXT,
+					post_id INTEGER,
+					points INTEGER DEFAULT 0,
+					PRIMARY KEY (ballot_id, post_id),
+					FOREIGN KEY (ballot_id) REFERENCES ballots(id)
+				)
+				`,
+			)
+			.run();
+
+		db
+			.prepare(
+				`
+				INSERT OR IGNORE INTO votes (ballot_id, post_id, points)
+				VALUES (?, ?, 0)
+				`,
+			)
+			.run(ballotId, post.id);
+	}
+
+	db
+		.prepare(
+			`
+			INSERT OR REPLACE INTO ballots (id, options)
+			VALUES (?, ?)
+			`,
+		)
+		.run(ballotId, JSON.stringify(posts));
+}
+
 function buildPostsDisplay(posts) {
 	const components = [];
 	posts.forEach((post, idx) => {
-		const title = new TextDisplayBuilder().setContent(`### **${post.title}**`);
+		const title = new TextDisplayBuilder().setContent(
+			`### ${post.id}. **${post.title}**`,
+		);
 		const description = new TextDisplayBuilder().setContent(
 			`**Created by <@${post.author}>**\n*Original Post: ${post.threadUrl}*`,
 		);
@@ -83,6 +138,30 @@ function buildPostsDisplay(posts) {
 		);
 		components.push(section, separator);
 	});
+	return components;
+}
+
+function buildBallotDisplay(month, year, ballotId, posts) {
+	const components = [];
+
+	components.push(
+		new TextDisplayBuilder().setContent(
+			`## 🗳️ ${month} ${year} Ballot\n\nIt's time to vote for your favorite icons! Here are all the submissions of this month:\n\n`,
+		),
+	);
+
+	components.push(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Large));
+
+	components.push(...buildPostsDisplay(posts));
+
+	const voteButton = new ButtonBuilder()
+		.setCustomId(`vote:${ballotId}`)
+		.setLabel("Vote")
+		.setStyle("Success")
+		.setEmoji("🗳️");
+
+	components.push(new ActionRowBuilder().addComponents(voteButton));
+
 	return components;
 }
 
@@ -114,6 +193,7 @@ export async function execute(interaction) {
 
 	const desiredTag = channel.availableTags.find((tag) => tag.name === tagName);
 	const desiredTagId = desiredTag ? desiredTag.id : null;
+	const ballotId = tagName.toLowerCase().replace(" ", "-");
 
 	if (!desiredTagId) {
 		return interaction.reply({
@@ -130,24 +210,11 @@ export async function execute(interaction) {
 	);
 	const posts = await getPostsFromThreads(filteredThreads);
 
-	const ballotDescription = new TextDisplayBuilder().setContent(
-		`## 🗳️ ${month} ${year} Ballot\n\nIt's time to vote for your favorite icons! Here are all the submissions of this month:\n\n`,
-	);
-	const separator = new SeparatorBuilder().setSpacing(
-		SeparatorSpacingSize.Large,
-	);
-	const postsDisplay = buildPostsDisplay(posts);
-	const voteButton = new ButtonBuilder()
-		.setCustomId("vote")
-		.setLabel("Vote")
-		.setStyle("Success")
-		.setEmoji("🗳️");
-
-	const row = new ActionRowBuilder().addComponents(voteButton);
+	updateDatabase(ballotId, posts);
 
 	await interaction.reply({
 		flags: [MessageFlags.IsComponentsV2],
-		components: [ballotDescription, separator, ...postsDisplay, row],
+		components: buildBallotDisplay(month, year, ballotId, posts),
 		allowedMentions: { parse: [] },
 	});
 }
