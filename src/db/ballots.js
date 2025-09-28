@@ -1,7 +1,23 @@
-import db from "../db.js";
+import db from "./db.js";
 
 export function getBallot(ballotId) {
 	return db.prepare("SELECT id FROM ballots WHERE id = ?").get(ballotId);
+}
+
+export function getAllBallots() {
+	return db
+		.prepare(
+			"SELECT id, message_id, channel_id, created_at, ttl FROM ballots WHERE closed = 0",
+		)
+		.all();
+}
+
+export function closeBallot(ballotId) {
+	return db.prepare("UPDATE ballots SET closed = 1 WHERE id = ?").run(ballotId);
+}
+
+export function getBallotOptions(ballotId) {
+	return db.prepare("SELECT options FROM ballots WHERE id = ?").get(ballotId);
 }
 
 export function upsertBallotAndDefinePosts(

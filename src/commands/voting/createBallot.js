@@ -98,7 +98,7 @@ function buildBallotDisplay(
 
 	if (outro) {
 		const voteButton = new ButtonBuilder()
-			.setCustomId(`vote:${ballotId}`)
+			.setCustomId(`vote:ballot:${ballotId}`)
 			.setLabel("Vote")
 			.setStyle("Success")
 			.setEmoji("🗳️");

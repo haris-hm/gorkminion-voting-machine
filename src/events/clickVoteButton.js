@@ -9,109 +9,14 @@ import {
 	SeparatorBuilder,
 	SeparatorSpacingSize,
 } from "discord.js";
-import db from "../db.js";
-
-export const name = Events.InteractionCreate;
-
-function calculateVotesAvailable(options) {
-	return Math.ceil(options.length * 0.75);
-}
-
-function updateUserVoteTable(ballotId, userId, options) {
-	db
-		.prepare(
-			`INSERT OR IGNORE INTO user_votes 
-			(ballot_id, user_id, votes_given, votes_available, options_available) 
-			VALUES (?, ?, 0, ?, ?)
-			`,
-		)
-		.run(
-			ballotId,
-			userId,
-			calculateVotesAvailable(options),
-			JSON.stringify(options),
-		);
-}
-
-function getUserVotes(ballotId, userId) {
-	const row = db
-		.prepare(
-			`SELECT votes_given FROM user_votes 
-			WHERE ballot_id = ? AND user_id = ?`,
-		)
-		.get(ballotId, userId);
-	return row ? row.votes_given : 0;
-}
-
-function getVotesAvailable(ballotId, userId) {
-	const row = db
-		.prepare(
-			`SELECT votes_available FROM user_votes 
-			WHERE ballot_id = ? AND user_id = ?`,
-		)
-		.get(ballotId, userId);
-	return row ? row.votes_available : 0;
-}
-
-function incrementUserVotes(ballotId, userId) {
-	db
-		.prepare(
-			`UPDATE user_votes 
-			SET votes_given = votes_given + 1 
-			WHERE ballot_id = ? AND user_id = ?`,
-		)
-		.run(ballotId, userId);
-}
-
-function getOptionsAvailable(ballotId, userId) {
-	const row = db
-		.prepare(
-			"SELECT options_available FROM user_votes WHERE ballot_id = ? AND user_id = ?",
-		)
-		.get(ballotId, userId);
-	return row && row.options_available ? JSON.parse(row.options_available) : [];
-}
-
-function getCurrentPointValue(ballotId, userId) {
-	const votesAvailable = getVotesAvailable(ballotId, userId);
-	const userVotes = getUserVotes(ballotId, userId);
-	return votesAvailable - userVotes;
-}
-
-function recordVote(ballotId, postId, userId) {
-	const pointsValue = getCurrentPointValue(ballotId, userId);
-	if (pointsValue <= 0) return false;
-
-	const options = getOptionsAvailable(ballotId, userId);
-	if (!options.find((option) => parseInt(option.id) === parseInt(postId))) {
-		return false;
-	}
-
-	db
-		.prepare(
-			`UPDATE votes
-			SET points = points + ?
-			WHERE ballot_id = ? AND post_id = ?
-			`,
-		)
-		.run(pointsValue, ballotId, postId);
-
-	const newOptions = options.filter(
-		(option) => parseInt(option.id) !== parseInt(postId),
-	);
-
-	db
-		.prepare(
-			`UPDATE user_votes
-			SET options_available = ?
-			WHERE ballot_id = ? AND user_id = ?
-			`,
-		)
-		.run(JSON.stringify(newOptions), ballotId, userId);
-
-	incrementUserVotes(ballotId, userId);
-	return true;
-}
+import {
+	getOptionsAvailable,
+	getUserVotes,
+	getVotesAvailable,
+	updateUserVoteTable,
+	recordVote,
+} from "../db/votes.js";
+import { getBallotOptions } from "../db/ballots.js";
 
 function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
 	const components = [];
@@ -140,7 +45,7 @@ function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
 			.addTextDisplayComponents(title, description)
 			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(option.imageUrl));
 		const voteButton = new ButtonBuilder()
-			.setCustomId(`voteOption:${option.id}`)
+			.setCustomId(`vote:option:${option.id}`)
 			.setLabel(`Vote for ${option.id}`)
 			.setStyle("Primary");
 		const actionRow = new ActionRowBuilder().addComponents(voteButton);
@@ -157,7 +62,7 @@ function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
 	if (page > 0) {
 		navRow.addComponents(
 			new ButtonBuilder()
-				.setCustomId(`votePage:prev:${page - 1}`)
+				.setCustomId("vote:page:prev")
 				.setLabel("Previous")
 				.setStyle("Secondary"),
 		);
@@ -165,7 +70,7 @@ function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
 	if (end < options.length) {
 		navRow.addComponents(
 			new ButtonBuilder()
-				.setCustomId(`votePage:next:${page + 1}`)
+				.setCustomId("vote:page:next")
 				.setLabel("Next")
 				.setStyle("Secondary"),
 		);
@@ -236,7 +141,7 @@ When you're ready, please click the start button below to begin the voting proce
 	const introduction = new TextDisplayBuilder().setContent(introductionContent);
 
 	const startButton = new ButtonBuilder()
-		.setCustomId(`startVoting:${ballotId}`)
+		.setCustomId(`vote:start:${ballotId}`)
 		.setLabel(alreadyStartedVoting ? "Resume Voting" : "Start Voting")
 		.setStyle("Primary")
 		.setEmoji("✅");
@@ -259,59 +164,87 @@ When you're ready, please click the start button below to begin the voting proce
 
 	collector.on("collect", async (i) => {
 		try {
-			if (i.customId.startsWith("startVoting")) {
-				currentPage = 0;
-				await handleVoteInteraction(ballotId, userId, i, currentPage);
-			} else if (i.customId.startsWith("voteOption")) {
-				const optionId = i.customId.split(":")[1];
-				const result = recordVote(ballotId, optionId, interaction.user.id);
+			const buttonDefinition = i.customId.split(":");
 
-				if (!result) {
-					await i.update({
-						components: [
-							new TextDisplayBuilder().setContent(
-								"Nice try! I know, I know, literally 1984 or whatever. 🤓",
-							),
-						],
-						flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
-					});
-					collector.stop();
-					return;
-				}
+			const buttonType = buttonDefinition[0];
+			const buttonAction = buttonDefinition[1];
+			const buttonArg = buttonDefinition[2];
 
-				const options = getOptionsAvailable(ballotId, userId);
-				const goBackOnePage = currentPage > 0 && options.length <= currentPage * 4;
-				if (goBackOnePage) currentPage -= 1;
-
-				await handleVoteInteraction(ballotId, userId, i, currentPage);
-			} else if (i.customId.startsWith("votePage:prev")) {
-				currentPage = Math.max(0, currentPage - 1);
-				await handleVoteInteraction(ballotId, userId, i, currentPage);
-			} else if (i.customId.startsWith("votePage:next")) {
-				currentPage += 1;
-				await handleVoteInteraction(ballotId, userId, i, currentPage);
+			if (buttonType !== "vote") {
+				return;
 			}
-			collector.resetTimer();
+
+			switch (buttonAction) {
+				case "start":
+					currentPage = 0;
+					await handleVoteInteraction(ballotId, userId, i, currentPage);
+					break;
+
+				case "option":
+					const result = recordVote(ballotId, buttonArg, interaction.user.id);
+
+					if (!result) {
+						await i.update({
+							components: [
+								new TextDisplayBuilder().setContent(
+									"Nice try! I know, I know, literally 1984 or whatever. 🤓",
+								),
+							],
+							flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
+						});
+						collector.stop();
+						return;
+					}
+
+					const options = getOptionsAvailable(ballotId, userId);
+					if (currentPage > 0 && options.length <= currentPage * 4) currentPage -= 1;
+
+					await handleVoteInteraction(ballotId, userId, i, currentPage);
+					break;
+
+				case "page":
+					switch (buttonArg) {
+						case "prev":
+							currentPage = Math.max(0, currentPage - 1);
+							break;
+						case "next":
+							currentPage += 1;
+							break;
+						default:
+							console.warn("Unknown page button argument:", buttonArg);
+							return;
+					}
+
+					await handleVoteInteraction(ballotId, userId, i, currentPage);
+					break;
+
+				default:
+					console.warn("Unknown button action:", buttonAction);
+					break;
+			}
 		} catch (err) {
 			console.error("Error handling interaction:", err);
+
 			if (!i.replied && !i.deferred) {
 				await i.reply({
 					content: "An error occurred.",
 					flags: MessageFlags.Ephemeral,
 				});
 			}
+		} finally {
+			collector.resetTimer();
 		}
 	});
 }
 
+export const name = Events.InteractionCreate;
+
 export async function execute(interaction) {
 	if (!interaction.isButton()) return;
-	if (!interaction.customId.includes("vote:")) return;
+	if (!interaction.customId.startsWith("vote:ballot:")) return;
 
-	const ballotId = interaction.customId.split(":", 2)[1];
-	const row = db
-		.prepare("SELECT options FROM ballots WHERE id = ?")
-		.get(ballotId);
+	const ballotId = interaction.customId.split(":", 3)[2];
+	const row = getBallotOptions(ballotId);
 	const options = row ? JSON.parse(row.options) : [];
 
 	updateUserVoteTable(ballotId, interaction.user.id, options);

@@ -1,22 +1,14 @@
 import { Events, ActionRowBuilder, ButtonBuilder } from "discord.js";
-import cron from "node-cron";
-import db from "../db.js";
+import { getAllBallots, closeBallot } from "../db/ballots.js";
 
-export const name = Events.ClientReady;
-export const once = true;
+import cron from "node-cron";
 
 async function closeBallots(client) {
 	const now = Date.now();
-	const ballots = db
-		.prepare(
-			"SELECT id, message_id, channel_id, created_at, ttl FROM ballots WHERE closed = 0",
-		)
-		.all();
+	const ballots = getAllBallots();
 
 	for (const ballot of ballots) {
 		console.log(`Checking ballot ${ballot.id}`);
-		// if (now - new Date(ballot.created_at).getTime() > 24 * 60 * 60 * 1000) {
-		// 10 seconds for testing
 		if (now - new Date(ballot.created_at).getTime() > ballot.ttl) {
 			console.log(`Closing ballot ${ballot.id}. TTL: ${ballot.ttl} ms`);
 
@@ -35,13 +27,16 @@ async function closeBallots(client) {
 					allowedMentions: { parse: [] },
 				});
 
-				db.prepare("UPDATE ballots SET closed = 1 WHERE id = ?").run(ballot.id);
+				closeBallot(ballot.id);
 			} catch (err) {
 				console.error("Failed to close ballot:", err);
 			}
 		}
 	}
 }
+
+export const name = Events.ClientReady;
+export const once = true;
 
 export function execute(client) {
 	console.log(`Ready! Logged in as ${client.user.tag}`);

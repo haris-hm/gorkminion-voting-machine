@@ -6,7 +6,7 @@ import path from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const db = new Database(path.join(__dirname, "..", "data.sqlite"));
+const db = new Database(path.join(__dirname, "../../", "data.sqlite"));
 
 // Set recommended PRAGMAs
 db.pragma("journal_mode = WAL");
