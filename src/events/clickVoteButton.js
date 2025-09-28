@@ -9,6 +9,7 @@ import {
 	SeparatorBuilder,
 	SeparatorSpacingSize,
 } from "discord.js";
+
 import {
 	getOptionsAvailable,
 	getUserVotes,
@@ -16,33 +17,35 @@ import {
 	updateUserVoteTable,
 	recordVote,
 } from "../db/votes.js";
+
+import {
+	votingProcessIntro,
+	votePageText,
+	postDisplayText,
+} from "../utils/templates.js";
+
 import { getBallotOptions } from "../db/ballots.js";
 
-function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
+const POSTS_PER_PAGE = 4;
+
+function buildVoteComponents(options, pointValue, page = 0) {
 	const components = [];
 
-	const start = page * pageSize;
-	const end = Math.min(start + pageSize, options.length);
+	const start = page * POSTS_PER_PAGE;
+	const end = Math.min(start + POSTS_PER_PAGE, options.length);
+	const totalPages = Math.ceil(options.length / POSTS_PER_PAGE);
+
 	const pageOptions = options.slice(start, end);
-	const totalPages = Math.ceil(options.length / pageSize);
-
-	let introContent = `Please select the icon you want to award ${pointValue} points to.`;
-
-	if (totalPages > 1) {
-		introContent += `\n\n**(Page ${page + 1}/${totalPages})**`;
-	}
+	const introContent = votePageText(pointValue, page + 1, totalPages);
 
 	components.push(new TextDisplayBuilder().setContent(introContent));
 
 	pageOptions.forEach((option, idx) => {
-		const title = new TextDisplayBuilder().setContent(
-			`### ${option.id}. **${option.title}**`,
-		);
-		const description = new TextDisplayBuilder().setContent(
-			`**Created by <@${option.author}>**\n*Original Post: ${option.threadUrl}*`,
-		);
+		const displayText = postDisplayText(option);
+
+		const title = new TextDisplayBuilder().setContent(displayText);
 		const section = new SectionBuilder()
-			.addTextDisplayComponents(title, description)
+			.addTextDisplayComponents(title)
 			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(option.imageUrl));
 		const voteButton = new ButtonBuilder()
 			.setCustomId(`vote:option:${option.id}`)
@@ -57,7 +60,6 @@ function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
 		components.push(section, actionRow, separator);
 	});
 
-	// Add navigation buttons if needed
 	const navRow = new ActionRowBuilder();
 	if (page > 0) {
 		navRow.addComponents(
@@ -125,27 +127,19 @@ async function startVotingDialogTree(ballotId, interaction) {
 	}
 
 	const alreadyStartedVoting = startingUserVotes > 0;
-
-	let introductionContent = `
-## Voting Process
-
-You can vote for up to **${startingVotesAvailable}** options in this ballot. You will rank your choices from 1 to ${startingVotesAvailable}. Your number 1 choice will receive ${startingVotesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point.
-
-When you're ready, please click the start button below to begin the voting process.
-	`;
-
-	if (alreadyStartedVoting) {
-		introductionContent += `\n-# **Note:** *You have already started voting. Clicking start again will resume your voting process. You have used **${startingUserVotes}** out of **${startingVotesAvailable}** votes.*`;
-	}
+	const introductionContent = votingProcessIntro(
+		startingVotesAvailable,
+		startingUserVotes,
+		alreadyStartedVoting,
+	);
+	let currentPage = 0;
 
 	const introduction = new TextDisplayBuilder().setContent(introductionContent);
-
 	const startButton = new ButtonBuilder()
 		.setCustomId(`vote:start:${ballotId}`)
 		.setLabel(alreadyStartedVoting ? "Resume Voting" : "Start Voting")
 		.setStyle("Primary")
 		.setEmoji("✅");
-
 	const row = new ActionRowBuilder().addComponents(startButton);
 
 	const response = await interaction.reply({
@@ -159,8 +153,6 @@ When you're ready, please click the start button below to begin the voting proce
 		time: 1000 * 60 * 24,
 		filter: (i) => i.user.id === interaction.user.id,
 	});
-
-	let currentPage = 0;
 
 	collector.on("collect", async (i) => {
 		try {
@@ -197,7 +189,8 @@ When you're ready, please click the start button below to begin the voting proce
 					}
 
 					const options = getOptionsAvailable(ballotId, userId);
-					if (currentPage > 0 && options.length <= currentPage * 4) currentPage -= 1;
+					if (currentPage > 0 && options.length <= currentPage * POSTS_PER_PAGE)
+						currentPage -= 1;
 
 					await handleVoteInteraction(ballotId, userId, i, currentPage);
 					break;

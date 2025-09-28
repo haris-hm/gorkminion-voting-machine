@@ -9,7 +9,9 @@ import {
 	SeparatorBuilder,
 	SeparatorSpacingSize,
 } from "discord.js";
+
 import { upsertBallotAndDefinePosts, getBallot } from "../../db/ballots.js";
+import { postDisplayText } from "../../utils/templates.js";
 
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
 
@@ -56,12 +58,11 @@ async function getPostsFromThreads(threads) {
 
 function buildPostsDisplay(posts) {
 	const components = [];
+
 	posts.forEach((post, idx) => {
-		const title = new TextDisplayBuilder().setContent(
-			`### ${post.id}. **${post.title}**
-**Created by <@${post.author}>**\n*Original Post: ${post.threadUrl}*
-			`,
-		);
+		const displayText = postDisplayText(post);
+
+		const title = new TextDisplayBuilder().setContent(displayText);
 		const section = new SectionBuilder()
 			.addTextDisplayComponents(title)
 			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(post.imageUrl));
