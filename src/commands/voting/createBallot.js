@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 
 import { upsertBallotAndDefinePosts, getBallot } from "../../db/ballots.js";
-import { postDisplayText } from "../../utils/templates.js";
+import { postDisplayText, ballotIntro } from "../../utils/templates.js";
 
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
 
@@ -85,16 +85,10 @@ function buildBallotDisplay(
 	outro = true,
 ) {
 	const components = [];
-	let introText = `## 🗳️ ${month} ${year} Ballot\n\nIt's time to vote for your favorite icons! Here are all the submissions of this month:\n\n`;
-
-	if (!intro) {
-		introText = `## 🗳️ ${month} ${year} Ballot *(cont.)*\n\n`;
-	}
+	const introText = ballotIntro(month, year, !intro);
 
 	components.push(new TextDisplayBuilder().setContent(introText));
-
 	components.push(new SeparatorBuilder().setSpacing(SeparatorSpacingSize.Large));
-
 	components.push(...buildPostsDisplay(posts));
 
 	if (outro) {

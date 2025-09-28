@@ -172,7 +172,7 @@ async function startVotingDialogTree(ballotId, interaction) {
 					await handleVoteInteraction(ballotId, userId, i, currentPage);
 					break;
 
-				case "option":
+				case "option": {
 					const result = recordVote(ballotId, buttonArg, interaction.user.id);
 
 					if (!result) {
@@ -189,11 +189,13 @@ async function startVotingDialogTree(ballotId, interaction) {
 					}
 
 					const options = getOptionsAvailable(ballotId, userId);
-					if (currentPage > 0 && options.length <= currentPage * POSTS_PER_PAGE)
+					if (currentPage > 0 && options.length <= currentPage * POSTS_PER_PAGE) {
 						currentPage -= 1;
+					}
 
 					await handleVoteInteraction(ballotId, userId, i, currentPage);
 					break;
+				}
 
 				case "page":
 					switch (buttonArg) {
