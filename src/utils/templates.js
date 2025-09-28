@@ -111,7 +111,19 @@ export function winnersDisplay(month, year) {
 	const content = [
 		`## 🏆 Winners for ${month} ${year} 🏆`,
 		"",
-		"The top five icons with the highest points are:",
+		"It's time to reveal the winners of this month's icon ballot! Here are the top icons that received the highest votes:",
+		"",
+	];
+
+	return joinLines(content);
+}
+
+export function rankDisplay(rank, points) {
+	const content = [
+		`## ${
+			rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : "🏆"
+		} Rank ${rank}: `,
+		`Here are the posts which earned **${points} points**:`,
 		"",
 	];
 

@@ -167,7 +167,7 @@ export async function execute(interaction) {
 
 	const ttl =
 		//interaction.options.getInteger("ttl") * 60 * 1000 || 1000 * 60 * 60 * 24;
-		1000 * 15; // 15 seconds for testing
+		1000 * 45; // 15 seconds for testing
 	const force = interaction.options.getBoolean("force") || false;
 
 	const month = interaction.options.getString("month", true);

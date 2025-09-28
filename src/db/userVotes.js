@@ -63,6 +63,26 @@ export function updateUserVotingSequence(ballotId, userId, postId) {
 	}
 }
 
+export function getAllUserIds(ballotId) {
+	const rows = db
+		.prepare(
+			`SELECT user_id FROM user_votes 
+			WHERE ballot_id = ?`,
+		)
+		.all(ballotId);
+	return rows.map((row) => row.user_id);
+}
+
+export function getUserVotingSequence(ballotId, userId) {
+	const row = db
+		.prepare(
+			`SELECT voting_sequence FROM user_votes 
+			WHERE ballot_id = ? AND user_id = ?`,
+		)
+		.get(ballotId, userId);
+	return row ? JSON.parse(row.voting_sequence || "[]") : [];
+}
+
 export function hasUserVoted(ballotId, userId) {
 	const row = db
 		.prepare(
