@@ -1,19 +1,13 @@
-const { SlashCommandBuilder, MessageFlags } = require("discord.js");
-const fs = require("node:fs");
-const path = require("node:path");
+import { SlashCommandBuilder, MessageFlags } from "discord.js";
+import { fileURLToPath } from "node:url";
 
-require("dotenv").config();
+import fs from "node:fs";
+import path from "node:path";
+
 const ADMIN_USER = process.env.ADMIN_USER;
 
-const commandData = new SlashCommandBuilder()
-	.setName("reload")
-	.setDescription("Reloads a command.")
-	.addStringOption((option) =>
-		option
-			.setName("command")
-			.setDescription("The command to reload.")
-			.setRequired(true),
-	);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 function findCommandFile(commandsDir, commandName) {
 	const entries = fs.readdirSync(commandsDir, { withFileTypes: true });
@@ -32,7 +26,17 @@ function findCommandFile(commandsDir, commandName) {
 	return null;
 }
 
-async function execute(interaction) {
+export const data = new SlashCommandBuilder()
+	.setName("reload")
+	.setDescription("Reloads a command.")
+	.addStringOption((option) =>
+		option
+			.setName("command")
+			.setDescription("The command to reload.")
+			.setRequired(true),
+	);
+
+export async function execute(interaction) {
 	if (interaction.user.id !== ADMIN_USER) {
 		return interaction.reply({
 			content: "You do not have permission to use this command.",
@@ -54,10 +58,8 @@ async function execute(interaction) {
 		});
 	}
 
-	delete require.cache[require.resolve(commandFilePath)];
-
 	try {
-		const newCommand = require(commandFilePath);
+		const newCommand = await import(`${commandFilePath}?update=${Date.now()}`);
 		interaction.client.commands.set(newCommand.data.name, newCommand);
 		await interaction.reply({
 			content: `Command \`${newCommand.data.name}\` was reloaded!`,
@@ -71,8 +73,3 @@ async function execute(interaction) {
 		});
 	}
 }
-
-module.exports = {
-	data: commandData,
-	execute,
-};

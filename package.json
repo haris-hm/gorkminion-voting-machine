@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node src/index.js",
-    "deployCommands": "node src/deployCommands.js"
+    "deployCommands": "node src/deployCommands.js",
+    "resetdb": "bash -c 'read -p \"⚠️ This will delete data.sqlite, data.sqlite-shm, and data.sqlite-wal. Are you sure? [Y/n]: \" ans; if [ -z \"$ans\" ] || [ \"$ans\" = \"y\" ] || [ \"$ans\" = \"Y\" ]; then rm -f data.sqlite data.sqlite-shm data.sqlite-wal && npm run dev; else echo \"Aborted.\"; fi'"
   },
   "keywords": [],
   "author": "",

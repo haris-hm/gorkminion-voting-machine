@@ -5,6 +5,9 @@ import {
 	ButtonBuilder,
 	TextDisplayBuilder,
 	ComponentType,
+	SectionBuilder,
+	SeparatorBuilder,
+	SeparatorSpacingSize,
 } from "discord.js";
 import db from "../db.js";
 
@@ -110,7 +113,71 @@ function recordVote(ballotId, postId, userId) {
 	return true;
 }
 
-async function handleVoteInteraction(ballotId, userId, interaction) {
+function buildVoteComponents(options, pointValue, page = 0, pageSize = 4) {
+	const components = [];
+
+	const start = page * pageSize;
+	const end = Math.min(start + pageSize, options.length);
+	const pageOptions = options.slice(start, end);
+	const totalPages = Math.ceil(options.length / pageSize);
+
+	let introContent = `Please select the icon you want to award ${pointValue} points to.`;
+
+	if (totalPages > 1) {
+		introContent += `\n\n**(Page ${page + 1}/${totalPages})**`;
+	}
+
+	components.push(new TextDisplayBuilder().setContent(introContent));
+
+	pageOptions.forEach((option, idx) => {
+		const title = new TextDisplayBuilder().setContent(
+			`### ${option.id}. **${option.title}**`,
+		);
+		const description = new TextDisplayBuilder().setContent(
+			`**Created by <@${option.author}>**\n*Original Post: ${option.threadUrl}*`,
+		);
+		const section = new SectionBuilder()
+			.addTextDisplayComponents(title, description)
+			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(option.imageUrl));
+		const voteButton = new ButtonBuilder()
+			.setCustomId(`voteOption:${option.id}`)
+			.setLabel(`Vote for ${option.id}`)
+			.setStyle("Primary");
+		const actionRow = new ActionRowBuilder().addComponents(voteButton);
+		const separator = new SeparatorBuilder().setSpacing(
+			idx === pageOptions.length - 1
+				? SeparatorSpacingSize.Large
+				: SeparatorSpacingSize.Small,
+		);
+		components.push(section, actionRow, separator);
+	});
+
+	// Add navigation buttons if needed
+	const navRow = new ActionRowBuilder();
+	if (page > 0) {
+		navRow.addComponents(
+			new ButtonBuilder()
+				.setCustomId(`votePage:prev:${page - 1}`)
+				.setLabel("Previous")
+				.setStyle("Secondary"),
+		);
+	}
+	if (end < options.length) {
+		navRow.addComponents(
+			new ButtonBuilder()
+				.setCustomId(`votePage:next:${page + 1}`)
+				.setLabel("Next")
+				.setStyle("Secondary"),
+		);
+	}
+	if (navRow.components.length > 0) {
+		components.push(navRow);
+	}
+
+	return components;
+}
+
+async function handleVoteInteraction(ballotId, userId, interaction, page = 0) {
 	const votesAvailable = getVotesAvailable(ballotId, userId);
 	const userVotes = getUserVotes(ballotId, userId);
 
@@ -129,27 +196,12 @@ async function handleVoteInteraction(ballotId, userId, interaction) {
 	}
 
 	const options = getOptionsAvailable(ballotId, userId);
-	const optionButtons = options.map((option) => {
-		return new ButtonBuilder()
-			.setCustomId(`voteOption:${option.id}`)
-			.setLabel(option.title)
-			.setStyle("Primary");
-	});
-
-	const rows = [];
-	for (let i = 0; i < optionButtons.length && rows.length < 5; i += 5) {
-		rows.push(
-			new ActionRowBuilder().addComponents(optionButtons.slice(i, i + 5)),
-		);
-	}
-
-	const instruction = new TextDisplayBuilder().setContent(
-		`Please select the icon you want to award ${pointValue} points to.`,
-	);
+	const components = buildVoteComponents(options, pointValue, page);
 
 	await interaction.update({
 		flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
-		components: [instruction, ...rows],
+		components: components,
+		allowedMentions: { parse: [] },
 	});
 }
 
@@ -203,10 +255,13 @@ When you're ready, please click the start button below to begin the voting proce
 		filter: (i) => i.user.id === interaction.user.id,
 	});
 
+	let currentPage = 0;
+
 	collector.on("collect", async (i) => {
 		try {
 			if (i.customId.startsWith("startVoting")) {
-				await handleVoteInteraction(ballotId, userId, i);
+				currentPage = 0;
+				await handleVoteInteraction(ballotId, userId, i, currentPage);
 			} else if (i.customId.startsWith("voteOption")) {
 				const optionId = i.customId.split(":")[1];
 				const result = recordVote(ballotId, optionId, interaction.user.id);
@@ -224,7 +279,17 @@ When you're ready, please click the start button below to begin the voting proce
 					return;
 				}
 
-				await handleVoteInteraction(ballotId, userId, i);
+				const options = getOptionsAvailable(ballotId, userId);
+				const goBackOnePage = currentPage > 0 && options.length <= currentPage * 4;
+				if (goBackOnePage) currentPage -= 1;
+
+				await handleVoteInteraction(ballotId, userId, i, currentPage);
+			} else if (i.customId.startsWith("votePage:prev")) {
+				currentPage = Math.max(0, currentPage - 1);
+				await handleVoteInteraction(ballotId, userId, i, currentPage);
+			} else if (i.customId.startsWith("votePage:next")) {
+				currentPage += 1;
+				await handleVoteInteraction(ballotId, userId, i, currentPage);
 			}
 			collector.resetTimer();
 		} catch (err) {
