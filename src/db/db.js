@@ -39,6 +39,9 @@ db.transaction(() => {
 			votes_given INTEGER DEFAULT 0,
 			votes_available INTEGER,
 			options_available TEXT,
+			voting_sequence TEXT,
+			voted_message_id TEXT,
+			voted_channel_id TEXT,
 			PRIMARY KEY (ballot_id, user_id),
 			FOREIGN KEY (ballot_id) REFERENCES ballots(id)
 		)`,

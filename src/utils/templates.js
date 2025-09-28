@@ -17,6 +17,7 @@ export function votingProcessIntro(
 
 	if (showNote) {
 		content.push(
+			"",
 			`-# **Note:** *You have already started voting. Clicking start again will resume your voting process. You have used **${userVotes}** / **${votesAvailable}** votes.*`,
 		);
 	}
@@ -40,7 +41,7 @@ export function postDisplayText(post) {
 	const content = [
 		`### ${post.id}. **${post.title}**`,
 		`**Created by <@${post.author}>**`,
-		`*Original Post: ${post.threadUrl}`,
+		`*Original Post: ${post.threadUrl}*`,
 	];
 
 	return joinLines(content);

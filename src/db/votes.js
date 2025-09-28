@@ -4,12 +4,18 @@ export function calculateVotesAvailable(options) {
 	return Math.ceil(options.length * 0.75);
 }
 
-export function updateUserVoteTable(ballotId, userId, options) {
+export function updateUserVoteTable(
+	ballotId,
+	userId,
+	options,
+	messageId,
+	channelId,
+) {
 	db
 		.prepare(
 			`INSERT OR IGNORE INTO user_votes 
-			(ballot_id, user_id, votes_given, votes_available, options_available) 
-			VALUES (?, ?, 0, ?, ?)
+			(ballot_id, user_id, votes_given, votes_available, options_available, voting_sequence, voted_message_id, voted_channel_id) 
+			VALUES (?, ?, 0, ?, ?, '[]', ?, ?)
 			`,
 		)
 		.run(
@@ -17,7 +23,52 @@ export function updateUserVoteTable(ballotId, userId, options) {
 			userId,
 			calculateVotesAvailable(options),
 			JSON.stringify(options),
+			messageId,
+			channelId,
 		);
+}
+
+export function getUserVotedMessage(ballotId, userId) {
+	const row = db
+		.prepare(
+			`SELECT voted_message_id, voted_channel_id FROM user_votes 
+			WHERE ballot_id = ? AND user_id = ?`,
+		)
+		.get(ballotId, userId);
+	return row
+		? { messageId: row.voted_message_id, channelId: row.voted_channel_id }
+		: null;
+}
+
+export function updateUserVotingSequence(ballotId, userId, postId) {
+	const row = db
+		.prepare(
+			`SELECT voting_sequence FROM user_votes 
+			WHERE ballot_id = ? AND user_id = ?`,
+		)
+		.get(ballotId, userId);
+
+	if (row) {
+		const currentSequence = JSON.parse(row.voting_sequence || "[]");
+		currentSequence.push(parseInt(postId));
+		db
+			.prepare(
+				`UPDATE user_votes 
+				SET voting_sequence = ?
+				WHERE ballot_id = ? AND user_id = ?`,
+			)
+			.run(JSON.stringify(currentSequence), ballotId, userId);
+	}
+}
+
+export function hasUserVoted(ballotId, userId) {
+	const row = db
+		.prepare(
+			`SELECT 1 FROM user_votes 
+			WHERE ballot_id = ? AND user_id = ?`,
+		)
+		.get(ballotId, userId);
+	return Boolean(row);
 }
 
 export function getUserVotes(ballotId, userId) {
@@ -51,12 +102,39 @@ export function incrementUserVotes(ballotId, userId) {
 }
 
 export function getOptionsAvailable(ballotId, userId) {
-	const row = db
+	const optionsRow = db
+		.prepare("SELECT options FROM ballots WHERE id = ?")
+		.get(ballotId);
+	if (!optionsRow) return [];
+
+	const optionIdsAvailable = db
 		.prepare(
 			"SELECT options_available FROM user_votes WHERE ballot_id = ? AND user_id = ?",
 		)
 		.get(ballotId, userId);
-	return row && row.options_available ? JSON.parse(row.options_available) : [];
+
+	const allOptions = JSON.parse(optionsRow.options);
+	const availableOptions = optionIdsAvailable
+		? JSON.parse(optionIdsAvailable.options_available).map((id) => parseInt(id))
+		: [];
+
+	return Array.from(
+		allOptions.filter((option) =>
+			availableOptions.some((availOption) => availOption === parseInt(option.id)),
+		),
+	);
+}
+
+export function getOptionIdsAvailable(ballotId, userId) {
+	const optionIdsAvailable = db
+		.prepare(
+			"SELECT options_available FROM user_votes WHERE ballot_id = ? AND user_id = ?",
+		)
+		.get(ballotId, userId);
+
+	return optionIdsAvailable
+		? JSON.parse(optionIdsAvailable.options_available).map((id) => parseInt(id))
+		: [];
 }
 
 export function getCurrentPointValue(ballotId, userId) {
@@ -69,8 +147,8 @@ export function recordVote(ballotId, postId, userId) {
 	const pointsValue = getCurrentPointValue(ballotId, userId);
 	if (pointsValue <= 0) return false;
 
-	const options = getOptionsAvailable(ballotId, userId);
-	if (!options.find((option) => parseInt(option.id) === parseInt(postId))) {
+	const options = getOptionIdsAvailable(ballotId, userId);
+	if (!options.includes(parseInt(postId))) {
 		return false;
 	}
 
@@ -83,9 +161,7 @@ export function recordVote(ballotId, postId, userId) {
 		)
 		.run(pointsValue, ballotId, postId);
 
-	const newOptions = options.filter(
-		(option) => parseInt(option.id) !== parseInt(postId),
-	);
+	const newOptions = options.filter((option) => option !== parseInt(postId));
 
 	db
 		.prepare(
@@ -97,5 +173,6 @@ export function recordVote(ballotId, postId, userId) {
 		.run(JSON.stringify(newOptions), ballotId, userId);
 
 	incrementUserVotes(ballotId, userId);
+	updateUserVotingSequence(ballotId, userId, postId);
 	return true;
 }

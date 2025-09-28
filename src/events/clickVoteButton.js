@@ -16,6 +16,8 @@ import {
 	getVotesAvailable,
 	updateUserVoteTable,
 	recordVote,
+	hasUserVoted,
+	getUserVotedMessage,
 } from "../db/votes.js";
 
 import {
@@ -99,6 +101,24 @@ async function handleVoteInteraction(ballotId, userId, interaction, page = 0) {
 			],
 			flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
 		});
+
+		const votedMessage = getUserVotedMessage(ballotId, userId);
+
+		if (votedMessage) {
+			try {
+				const message = await interaction.client.channels
+					.fetch(votedMessage.channelId)
+					.then((channel) => channel.messages.fetch(votedMessage.messageId));
+
+				await message.edit({
+					content: `<@${userId}> has voted!`,
+					allowedMentions: { parse: [] },
+				});
+			} catch (err) {
+				console.error("Error updating voted message:", err);
+			}
+		}
+
 		return;
 	}
 
@@ -241,7 +261,24 @@ export async function execute(interaction) {
 	const ballotId = interaction.customId.split(":", 3)[2];
 	const row = getBallotOptions(ballotId);
 	const options = row ? JSON.parse(row.options) : [];
+	const optionIds = options.map((opt) => opt.id);
 
-	updateUserVoteTable(ballotId, interaction.user.id, options);
+	const userId = interaction.user.id;
+
+	if (!hasUserVoted(ballotId, userId)) {
+		const votingMessage = await interaction.message.reply({
+			content: `<@${userId}> has started voting!`,
+			allowedMentions: { parse: [] },
+		});
+
+		updateUserVoteTable(
+			ballotId,
+			userId,
+			optionIds,
+			votingMessage.id,
+			votingMessage.channelId,
+		);
+	}
+
 	startVotingDialogTree(ballotId, interaction);
 }
