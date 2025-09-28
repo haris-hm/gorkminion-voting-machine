@@ -1,3 +1,12 @@
+import {
+	ActionRowBuilder,
+	ButtonBuilder,
+	SectionBuilder,
+	SeparatorBuilder,
+	SeparatorSpacingSize,
+	TextDisplayBuilder,
+} from "discord.js";
+
 function joinLines(lines) {
 	return lines.join("\n");
 }
@@ -27,7 +36,7 @@ export function votingProcessIntro(
 
 export function votePageText(pointValue, page, totalPages) {
 	const content = [
-		`Please select the icon you want to award ${pointValue} points to.`,
+		`Please select the icon you want to award **${pointValue} points** to.`,
 	];
 
 	if (totalPages > 1) {
@@ -49,13 +58,60 @@ export function postDisplayText(post) {
 
 export function ballotIntro(month, year, continuation = false) {
 	if (continuation) {
-		return `## 🗳️ ${month} ${year} Ballot *(cont.)*\n\n`;
+		return `## 🗳️ ${month} ${year} Server Icon Ballot *(cont.)*\n\n`;
 	}
 
 	const content = [
-		`## 🗳️ ${month} ${year} Ballot`,
+		`## 🗳️ ${month} ${year} Server Icon Ballot`,
 		"",
 		"It's time to vote for your favorite icons! Here are all the submissions of this month:",
+		"",
+	];
+
+	return joinLines(content);
+}
+
+export function postDisplay(
+	post,
+	separatorSpacing,
+	button = false,
+	extraInfo = "",
+) {
+	let displayText = postDisplayText(post);
+	const components = [];
+
+	if (extraInfo) {
+		displayText += `\n${extraInfo}`;
+	}
+
+	const title = new TextDisplayBuilder().setContent(displayText);
+	const section = new SectionBuilder()
+		.addTextDisplayComponents(title)
+		.setThumbnailAccessory((thumbnail) => thumbnail.setURL(post.imageUrl));
+	const voteButton = new ButtonBuilder()
+		.setCustomId(`vote:option:${post.id}`)
+		.setLabel(`Vote for ${post.id}`)
+		.setStyle("Success")
+		.setEmoji("✅");
+	const actionRow = new ActionRowBuilder().addComponents(voteButton);
+	const separator = new SeparatorBuilder().setSpacing(
+		separatorSpacing || SeparatorSpacingSize.Large,
+	);
+
+	components.push(section);
+	if (button) {
+		components.push(actionRow);
+	}
+	components.push(separator);
+
+	return components;
+}
+
+export function winnersDisplay(month, year) {
+	const content = [
+		`## 🏆 Winners for ${month} ${year} 🏆`,
+		"",
+		"The top five icons with the highest points are:",
 		"",
 	];
 

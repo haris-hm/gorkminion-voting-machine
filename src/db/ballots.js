@@ -12,8 +12,12 @@ export function getAllBallots() {
 		.all();
 }
 
-export function closeBallot(ballotId) {
-	return db.prepare("UPDATE ballots SET closed = 1 WHERE id = ?").run(ballotId);
+export function closeBallot(ballotId, winnerIds) {
+	db
+		.prepare("UPDATE ballots SET winners = ? WHERE id = ?")
+		.run(JSON.stringify(winnerIds), ballotId);
+
+	db.prepare("UPDATE ballots SET closed = 1 WHERE id = ?").run(ballotId);
 }
 
 export function getBallotOptions(ballotId) {
@@ -57,4 +61,15 @@ export function upsertBallotAndDefinePosts(
 			insertVote.run(ballotId, post.id);
 		}
 	})();
+}
+
+export function getPost(ballotId, postId) {
+	const optionsRow = db
+		.prepare("SELECT options FROM ballots WHERE id = ?")
+		.get(ballotId);
+
+	if (!optionsRow) return null;
+
+	const options = JSON.parse(optionsRow.options);
+	return options.find((post) => post.id === postId);
 }

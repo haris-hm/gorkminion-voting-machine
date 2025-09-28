@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 
 import { upsertBallotAndDefinePosts, getBallot } from "../../db/ballots.js";
-import { postDisplayText, ballotIntro } from "../../utils/templates.js";
+import { postDisplay, ballotIntro } from "../../utils/templates.js";
 
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
 
@@ -60,18 +60,15 @@ function buildPostsDisplay(posts) {
 	const components = [];
 
 	posts.forEach((post, idx) => {
-		const displayText = postDisplayText(post);
-
-		const title = new TextDisplayBuilder().setContent(displayText);
-		const section = new SectionBuilder()
-			.addTextDisplayComponents(title)
-			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(post.imageUrl));
-		const separator = new SeparatorBuilder().setSpacing(
-			idx === posts.length - 1
-				? SeparatorSpacingSize.Large
-				: SeparatorSpacingSize.Small,
+		components.push(
+			...postDisplay(
+				post,
+				idx === posts.length - 1
+					? SeparatorSpacingSize.Large
+					: SeparatorSpacingSize.Small,
+				false,
+			),
 		);
-		components.push(section, separator);
 	});
 	return components;
 }
@@ -94,8 +91,8 @@ function buildBallotDisplay(
 	if (outro) {
 		const voteButton = new ButtonBuilder()
 			.setCustomId(`vote:ballot:${ballotId}`)
-			.setLabel("Vote")
-			.setStyle("Success")
+			.setLabel("Cast Your Votes!")
+			.setStyle("Primary")
 			.setEmoji("🗳️");
 
 		components.push(new ActionRowBuilder().addComponents(voteButton));
@@ -169,7 +166,8 @@ export async function execute(interaction) {
 	}
 
 	const ttl =
-		interaction.options.getInteger("ttl") * 60 * 1000 || 1000 * 60 * 60 * 24;
+		//interaction.options.getInteger("ttl") * 60 * 1000 || 1000 * 60 * 60 * 24;
+		1000 * 15; // 15 seconds for testing
 	const force = interaction.options.getBoolean("force") || false;
 
 	const month = interaction.options.getString("month", true);

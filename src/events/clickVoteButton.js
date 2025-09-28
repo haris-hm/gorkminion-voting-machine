@@ -18,12 +18,12 @@ import {
 	recordVote,
 	hasUserVoted,
 	getUserVotedMessage,
-} from "../db/votes.js";
+} from "../db/userVotes.js";
 
 import {
 	votingProcessIntro,
 	votePageText,
-	postDisplayText,
+	postDisplay,
 } from "../utils/templates.js";
 
 import { getBallotOptions } from "../db/ballots.js";
@@ -43,23 +43,15 @@ function buildVoteComponents(options, pointValue, page = 0) {
 	components.push(new TextDisplayBuilder().setContent(introContent));
 
 	pageOptions.forEach((option, idx) => {
-		const displayText = postDisplayText(option);
-
-		const title = new TextDisplayBuilder().setContent(displayText);
-		const section = new SectionBuilder()
-			.addTextDisplayComponents(title)
-			.setThumbnailAccessory((thumbnail) => thumbnail.setURL(option.imageUrl));
-		const voteButton = new ButtonBuilder()
-			.setCustomId(`vote:option:${option.id}`)
-			.setLabel(`Vote for ${option.id}`)
-			.setStyle("Primary");
-		const actionRow = new ActionRowBuilder().addComponents(voteButton);
-		const separator = new SeparatorBuilder().setSpacing(
-			idx === pageOptions.length - 1
-				? SeparatorSpacingSize.Large
-				: SeparatorSpacingSize.Small,
+		components.push(
+			...postDisplay(
+				option,
+				idx === pageOptions.length - 1
+					? SeparatorSpacingSize.Large
+					: SeparatorSpacingSize.Small,
+				true,
+			),
 		);
-		components.push(section, actionRow, separator);
 	});
 
 	const navRow = new ActionRowBuilder();
@@ -67,7 +59,7 @@ function buildVoteComponents(options, pointValue, page = 0) {
 		navRow.addComponents(
 			new ButtonBuilder()
 				.setCustomId("vote:page:prev")
-				.setLabel("Previous")
+				.setLabel("⬅️ Previous")
 				.setStyle("Secondary"),
 		);
 	}
@@ -75,7 +67,7 @@ function buildVoteComponents(options, pointValue, page = 0) {
 		navRow.addComponents(
 			new ButtonBuilder()
 				.setCustomId("vote:page:next")
-				.setLabel("Next")
+				.setLabel("Next ➡️")
 				.setStyle("Secondary"),
 		);
 	}
@@ -158,7 +150,7 @@ async function startVotingDialogTree(ballotId, interaction) {
 	const startButton = new ButtonBuilder()
 		.setCustomId(`vote:start:${ballotId}`)
 		.setLabel(alreadyStartedVoting ? "Resume Voting" : "Start Voting")
-		.setStyle("Primary")
+		.setStyle("Success")
 		.setEmoji("✅");
 	const row = new ActionRowBuilder().addComponents(startButton);
 
