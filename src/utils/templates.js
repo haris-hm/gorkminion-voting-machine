@@ -19,7 +19,7 @@ export function votingProcessIntro(
 	const content = [
 		"## Voting Process",
 		"",
-		`You can vote for up to **${votesAvailable}** options in this ballot. You will rank your choices from 1 to ${votesAvailable}. Your number 1 choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point.`,
+		`You can vote for up to **${votesAvailable}** options in this ballot. You will rank your choices from 1 to ${votesAvailable}. Your number 1 choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point. Note that you cannot uncast a vote once it has been submitted, so please choose wisely!`,
 		"",
 		"When you're ready, please click the start button below to begin the voting process.",
 	];
