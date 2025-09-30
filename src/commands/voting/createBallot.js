@@ -14,6 +14,7 @@ import { upsertBallotAndDefinePosts, getBallot } from "../../db/ballots.js";
 import { postDisplay, ballotIntro } from "../../utils/templates.js";
 
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
+const CURRENT_YEAR = new Date().getFullYear();
 
 async function getPostsFromThreads(threads) {
 	const posts = [];
@@ -116,13 +117,43 @@ export const data = new SlashCommandBuilder()
 		option
 			.setName("month")
 			.setDescription("The to look for submissions for.")
-			.setRequired(true),
+			.setRequired(true)
+			.addChoices(
+				{ name: "January", value: "January" },
+				{ name: "February", value: "February" },
+				{ name: "March", value: "March" },
+				{ name: "April", value: "April" },
+				{ name: "May", value: "May" },
+				{ name: "June", value: "June" },
+				{ name: "July", value: "July" },
+				{ name: "August", value: "August" },
+				{ name: "September", value: "September" },
+				{ name: "October", value: "October" },
+				{ name: "November", value: "November" },
+				{ name: "December", value: "December" },
+			),
 	)
 	.addIntegerOption((option) =>
 		option
 			.setName("year")
 			.setDescription("The year to look for submissions for.")
-			.setRequired(true),
+			.setRequired(true)
+			.setMinValue(CURRENT_YEAR - 5)
+			.setMaxValue(CURRENT_YEAR + 5)
+			.addChoices(
+				{
+					name: String(CURRENT_YEAR - 1),
+					value: CURRENT_YEAR - 1,
+				},
+				{
+					name: String(CURRENT_YEAR),
+					value: CURRENT_YEAR,
+				},
+				{
+					name: String(CURRENT_YEAR + 1),
+					value: CURRENT_YEAR + 1,
+				},
+			),
 	)
 	.addBooleanOption((option) =>
 		option
@@ -173,6 +204,11 @@ export async function execute(interaction) {
 	const year = interaction.options.getInteger("year", true);
 	const tagName = `${month} ${year}`;
 
+	const administriviaTag = channel.availableTags.find(
+		(tag) => tag.name === "Administrivia",
+	);
+	const administriviaTagId = administriviaTag ? administriviaTag.id : null;
+
 	const desiredTag = channel.availableTags.find((tag) => tag.name === tagName);
 	const desiredTagId = desiredTag ? desiredTag.id : null;
 	const ballotId = tagName.toLowerCase().replace(" ", "-");
@@ -196,8 +232,10 @@ export async function execute(interaction) {
 	const activeThreads = await channel.threads.fetch();
 	const archivedThreads = await channel.threads.fetchArchived();
 	const allThreads = activeThreads.threads.concat(archivedThreads.threads);
-	const filteredThreads = allThreads.filter((thread) =>
-		thread.appliedTags.includes(desiredTagId),
+	const filteredThreads = allThreads.filter(
+		(thread) =>
+			thread.appliedTags.includes(desiredTagId) &&
+			!thread.appliedTags.includes(administriviaTagId),
 	);
 	const posts = await getPostsFromThreads(filteredThreads);
 
