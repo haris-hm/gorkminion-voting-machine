@@ -285,7 +285,9 @@ export async function execute(interaction) {
 			true,
 			postChunks.length === 1,
 		),
-		allowedMentions: { roles: [PARTICIPANT_ROLE_ID] },
+		allowedMentions: {
+			roles: [PARTICIPANT_ROLE_ID],
+		},
 	});
 
 	for (let i = 1; i < postChunks.length; i++) {

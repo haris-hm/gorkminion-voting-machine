@@ -7,7 +7,7 @@ export function getBallot(ballotId) {
 export function getAllBallots() {
 	return db
 		.prepare(
-			"SELECT id, message_id, channel_id, created_at, ttl FROM ballots WHERE closed = 0",
+			"SELECT id, message_id, channel_id, created_at, ttl, warning_sent FROM ballots WHERE closed = 0",
 		)
 		.all();
 }
@@ -20,8 +20,19 @@ export function closeBallot(ballotId, winnerIds) {
 	db.prepare("UPDATE ballots SET closed = 1 WHERE id = ?").run(ballotId);
 }
 
+export function isBallotClosed(ballotId) {
+	const row = db
+		.prepare("SELECT closed FROM ballots WHERE id = ?")
+		.get(ballotId);
+	return row ? Boolean(row.closed) : null;
+}
+
 export function getBallotOptions(ballotId) {
 	return db.prepare("SELECT options FROM ballots WHERE id = ?").get(ballotId);
+}
+
+export function warningSent(ballotId) {
+	db.prepare("UPDATE ballots SET warning_sent = 1 WHERE id = ?").run(ballotId);
 }
 
 export function upsertBallotAndDefinePosts(

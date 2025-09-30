@@ -5,8 +5,6 @@ import {
 	ButtonBuilder,
 	TextDisplayBuilder,
 	ComponentType,
-	SectionBuilder,
-	SeparatorBuilder,
 	SeparatorSpacingSize,
 } from "discord.js";
 
@@ -26,7 +24,7 @@ import {
 	postDisplay,
 } from "../utils/templates.js";
 
-import { getBallotOptions } from "../db/ballots.js";
+import { getBallotOptions, isBallotClosed } from "../db/ballots.js";
 
 const POSTS_PER_PAGE = 4;
 
@@ -157,6 +155,7 @@ async function startVotingDialogTree(ballotId, interaction) {
 	const response = await interaction.reply({
 		flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
 		components: [introduction, row],
+		allowedMentions: { parse: [] },
 		withResponse: true,
 	});
 
@@ -175,6 +174,19 @@ async function startVotingDialogTree(ballotId, interaction) {
 			const buttonArg = buttonDefinition[2];
 
 			if (buttonType !== "vote") {
+				return;
+			}
+
+			if (isBallotClosed(ballotId)) {
+				await i.update({
+					components: [
+						new TextDisplayBuilder().setContent(
+							"Sorry, but this ballot has already closed. Voting is no longer possible.",
+						),
+					],
+					flags: [MessageFlags.Ephemeral, MessageFlags.IsComponentsV2],
+				});
+				collector.stop();
 				return;
 			}
 

@@ -6,7 +6,12 @@ import {
 	MessageFlags,
 	SeparatorBuilder,
 } from "discord.js";
-import { getAllBallots, closeBallot, getPost } from "../db/ballots.js";
+import {
+	getAllBallots,
+	closeBallot,
+	getPost,
+	warningSent,
+} from "../db/ballots.js";
 import { getResults } from "../db/votes.js";
 import { getAllUserIds, getUserVotingSequence } from "../db/userVotes.js";
 import { postDisplay, winnersDisplay, rankDisplay } from "./templates.js";
@@ -57,7 +62,7 @@ async function showVotingStats(ballotId, message) {
 async function tabulateResults(ballotId, originalMessage) {
 	console.log(`Tabulating results for ballot ${ballotId}`);
 	const results = getResults(ballotId);
-	const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
+	const participantRoleId = process.env.PARTICIPANT_ROLE_ID;
 
 	if (results.length === 0 || results.every((r) => r.points === 0)) {
 		console.log(`No votes were cast in ballot ${ballotId}.`);
@@ -92,7 +97,9 @@ async function tabulateResults(ballotId, originalMessage) {
 	currentMessage = await originalMessage.reply({
 		flags: [MessageFlags.IsComponentsV2],
 		components: [intro],
-		allowedMentions: { roles: [PARTICIPANT_ROLE_ID] },
+		allowedMentions: {
+			roles: [participantRoleId],
+		},
 	});
 
 	const topFivePoints = Object.keys(pointsMap)
@@ -175,6 +182,45 @@ export async function closeBallots(client) {
 				message = await showVotingStats(ballot.id, results.lastMessage);
 			} catch (err) {
 				console.error("Failed to close ballot:", err);
+			}
+		}
+	}
+}
+
+export async function sendWarningMessages(client) {
+	const now = Date.now();
+	const ballots = getAllBallots();
+	const participantRoleId = process.env.PARTICIPANT_ROLE_ID;
+
+	for (const ballot of ballots) {
+		const timeElapsed = now - new Date(ballot.created_at).getTime();
+		const timeLeft = ballot.ttl - timeElapsed;
+		const warningThreshold = 1000 * 60 * process.env.WARNING_THRESHOLD_MINUTES;
+
+		if (timeLeft <= warningThreshold && timeLeft > 0 && !ballot.warning_sent) {
+			try {
+				const channel = await client.channels.fetch(ballot.channel_id);
+				const message = await channel.messages.fetch(ballot.message_id);
+
+				const closeTime = Math.floor(
+					(new Date(ballot.created_at).getTime() + ballot.ttl) / 1000,
+				);
+
+				const warningMessage = new TextDisplayBuilder().setContent(
+					`⚠️ <@&${participantRoleId}>, voting will close <t:${closeTime}:R>! Make sure to cast your votes now! ⚠️`,
+				);
+
+				await message.reply({
+					flags: [MessageFlags.IsComponentsV2],
+					components: [warningMessage],
+					allowedMentions: {
+						roles: [participantRoleId],
+					},
+				});
+
+				warningSent(ballot.id);
+			} catch (err) {
+				console.error("Failed to send warning message:", err);
 			}
 		}
 	}

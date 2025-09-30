@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 
 const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
+const ADMIN_USER_ID = process.env.ADMIN_USER;
 
 function joinLines(lines) {
 	return lines.join("\n");
@@ -20,19 +21,19 @@ export function votingProcessIntro(
 ) {
 	const content = [
 		"## Voting Process",
-		"Please read through these instructions carefully before proceeding.",
+		"Please read through these instructions throughly before voting.",
 		"",
-		`You can vote for up to **${votesAvailable}** options in this ballot. You will rank your choices from 1 to ${votesAvailable}. Your number 1 choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point. Please note that you cannot uncast a vote once it has been submitted, so please choose wisely!`,
+		`You can vote for up to **${votesAvailable}** options on this ballot. You will rank your choices from 1 to ${votesAvailable}. Your first choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point. Please note that you cannot uncast a vote once it has been submitted, so please choose carefully!`,
 		"",
-		"Also, there may be multiple pages of options to vote for so, please ensure you navigate through all pages to see all available options. It's recommended to look at the ballot prior to proceeding, just so you have an idea of all the options available.",
+		"There may be multiple pages of icons to, so click the `⬅️ Previous` and `Next ➡️` buttons to find the option that you're looking for if it's not on the current page. It's recommended that you look at the ballot prior to proceeding, just so you have an idea of all the options available.",
 		"",
-		"When you're ready, please click the start button below to begin the voting process.",
+		`When you're ready, please click the start button below to begin the voting process. If you have any questions or need assistance, feel free to ask <@${ADMIN_USER_ID}>.`,
 	];
 
 	if (showNote) {
 		content.push(
 			"",
-			`-# **Note:** *You have already started voting. Clicking start again will resume your voting process. You have used **${userVotes}** / **${votesAvailable}** votes.*`,
+			`-# **Note:** *You have already started voting. Clicking the button below will resume your voting process. You have used **${userVotes}** / **${votesAvailable}** votes.*`,
 		);
 	}
 
