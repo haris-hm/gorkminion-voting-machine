@@ -16,6 +16,8 @@ import { getResults } from "../db/votes.js";
 import { getAllUserIds, getUserVotingSequence } from "../db/userVotes.js";
 import { postDisplay, winnersDisplay, rankDisplay } from "./templates.js";
 
+const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
+
 async function showVotingStats(ballotId, message) {
 	const showUserVotingStats = process.env.SHOW_USER_VOTING_STATS === "true";
 
@@ -62,7 +64,6 @@ async function showVotingStats(ballotId, message) {
 async function tabulateResults(ballotId, originalMessage) {
 	console.log(`Tabulating results for ballot ${ballotId}`);
 	const results = getResults(ballotId);
-	const participantRoleId = process.env.PARTICIPANT_ROLE_ID;
 
 	if (results.length === 0 || results.every((r) => r.points === 0)) {
 		console.log(`No votes were cast in ballot ${ballotId}.`);
@@ -98,7 +99,7 @@ async function tabulateResults(ballotId, originalMessage) {
 		flags: [MessageFlags.IsComponentsV2],
 		components: [intro],
 		allowedMentions: {
-			roles: [participantRoleId],
+			roles: [PARTICIPANT_ROLE_ID],
 		},
 	});
 
@@ -190,7 +191,6 @@ export async function closeBallots(client) {
 export async function sendWarningMessages(client) {
 	const now = Date.now();
 	const ballots = getAllBallots();
-	const participantRoleId = process.env.PARTICIPANT_ROLE_ID;
 
 	for (const ballot of ballots) {
 		const timeElapsed = now - new Date(ballot.created_at).getTime();
@@ -207,14 +207,14 @@ export async function sendWarningMessages(client) {
 				);
 
 				const warningMessage = new TextDisplayBuilder().setContent(
-					`⚠️ <@&${participantRoleId}>, voting will close <t:${closeTime}:R>! Make sure to cast your votes now! ⚠️`,
+					`## ⚠️ WARNING ⚠️\n<@&${PARTICIPANT_ROLE_ID}>, voting will close <t:${closeTime}:R>! Make sure to cast your votes now!`,
 				);
 
 				await message.reply({
 					flags: [MessageFlags.IsComponentsV2],
 					components: [warningMessage],
 					allowedMentions: {
-						roles: [participantRoleId],
+						roles: [PARTICIPANT_ROLE_ID],
 					},
 				});
 
