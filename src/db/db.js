@@ -25,6 +25,7 @@ db.transaction(() => {
 				channel_id TEXT,
 				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 				closed INTEGER DEFAULT 0,
+				warning_sent INTEGER DEFAULT 0,
 				ttl INTEGER DEFAULT 1440,
 				winners TEXT DEFAULT '[]'
 			)

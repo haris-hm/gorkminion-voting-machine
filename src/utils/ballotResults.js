@@ -12,22 +12,22 @@ import { getAllUserIds, getUserVotingSequence } from "../db/userVotes.js";
 import { postDisplay, winnersDisplay, rankDisplay } from "./templates.js";
 
 async function showVotingStats(ballotId, message) {
-	const userIds = getAllUserIds(ballotId);
+	const showUserVotingStats = process.env.SHOW_USER_VOTING_STATS === "true";
 
-	let iconVoteResults = [
-		"# Full Icon Vote Results",
-		"\n",
-		"## User Voting Statistics:",
-	];
+	let iconVoteResults = ["# Full Icon Vote Results", "\n"];
 
-	for (let i = 0; i < userIds.length; i++) {
-		const userId = userIds[i];
-		const votingSequence = getUserVotingSequence(ballotId, userId);
-		iconVoteResults.push(
-			`${i + 1}. <@${userId}> voted in the sequence: ${votingSequence.join(
-				" -> ",
-			)}`,
-		);
+	if (showUserVotingStats) {
+		const userIds = getAllUserIds(ballotId);
+		iconVoteResults.push("## User Voting Statistics:");
+		for (let i = 0; i < userIds.length; i++) {
+			const userId = userIds[i];
+			const votingSequence = getUserVotingSequence(ballotId, userId);
+			iconVoteResults.push(
+				`${i + 1}. <@${userId}> voted in the sequence: ${votingSequence.join(
+					" -> ",
+				)}`,
+			);
+		}
 	}
 
 	iconVoteResults.push("## Points Earned by Each Post:");
@@ -37,19 +37,19 @@ async function showVotingStats(ballotId, message) {
 	results.forEach((postResults) => {
 		const post = getPost(ballotId, postResults.postId);
 		iconVoteResults.push(
-			`- Post: ${post.threadUrl} | Title: ${post.title}\n    - Points Earned: ${postResults.points}`,
+			`- Post: ${post.threadUrl}\n    - Points Earned: ${postResults.points}`,
 		);
 	});
 
-	iconVoteResults.push("\nThank you all for participating in the vote! 🎉");
+	iconVoteResults.push("\nThanks to everyone who participated in the vote! 🎉");
 
-	const voterInfoDisplay = new TextDisplayBuilder().setContent(
+	const ballotVotingStatsDisplay = new TextDisplayBuilder().setContent(
 		iconVoteResults.join("\n"),
 	);
 
 	return await message.reply({
 		flags: [MessageFlags.IsComponentsV2],
-		components: [voterInfoDisplay],
+		components: [ballotVotingStatsDisplay],
 		allowedMentions: { parse: [] },
 	});
 }
@@ -57,6 +57,20 @@ async function showVotingStats(ballotId, message) {
 async function tabulateResults(ballotId, originalMessage) {
 	console.log(`Tabulating results for ballot ${ballotId}`);
 	const results = getResults(ballotId);
+	const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
+
+	if (results.length === 0 || results.every((r) => r.points === 0)) {
+		console.log(`No votes were cast in ballot ${ballotId}.`);
+		const noVotesDisplay = new TextDisplayBuilder().setContent(
+			"No votes were cast in this ballot. No winners to display.",
+		);
+		await originalMessage.reply({
+			flags: [MessageFlags.IsComponentsV2],
+			components: [noVotesDisplay],
+			allowedMentions: { parse: [] },
+		});
+		return { winnerIds: [], lastMessage: originalMessage };
+	}
 
 	const pointsMap = {};
 	results.forEach((postResults) => {
@@ -78,6 +92,7 @@ async function tabulateResults(ballotId, originalMessage) {
 	currentMessage = await originalMessage.reply({
 		flags: [MessageFlags.IsComponentsV2],
 		components: [intro],
+		allowedMentions: { roles: [PARTICIPANT_ROLE_ID] },
 	});
 
 	const topFivePoints = Object.keys(pointsMap)
@@ -133,7 +148,7 @@ export async function closeBallots(client) {
 
 			try {
 				const channel = await client.channels.fetch(ballot.channel_id);
-				const message = await channel.messages.fetch(ballot.message_id);
+				let message = await channel.messages.fetch(ballot.message_id);
 
 				// Disable the vote button
 				const oldRow = message.components[message.components.length - 1];
@@ -149,8 +164,15 @@ export async function closeBallots(client) {
 				});
 
 				const results = await tabulateResults(ballot.id, message);
+				message = results.lastMessage;
 				closeBallot(ballot.id, results.winnerIds);
-				const lastMessage = await showVotingStats(ballot.id, results.lastMessage);
+
+				if (results.winnerIds.length === 0) {
+					console.log(`No winners for ballot ${ballot.id}.`);
+					continue;
+				}
+
+				message = await showVotingStats(ballot.id, results.lastMessage);
 			} catch (err) {
 				console.error("Failed to close ballot:", err);
 			}

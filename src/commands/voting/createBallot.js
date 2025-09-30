@@ -5,16 +5,31 @@ import {
 	TextDisplayBuilder,
 	ButtonBuilder,
 	ActionRowBuilder,
-	SectionBuilder,
 	SeparatorBuilder,
 	SeparatorSpacingSize,
+	PermissionFlagsBits,
 } from "discord.js";
 
 import { upsertBallotAndDefinePosts, getBallot } from "../../db/ballots.js";
 import { postDisplay, ballotIntro } from "../../utils/templates.js";
 
 const SUBMISSIONS_CHANNEL = process.env.SUBMISSIONS_CHANNEL;
+const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
 const CURRENT_YEAR = new Date().getFullYear();
+const MONTHS = [
+	"January",
+	"February",
+	"March",
+	"April",
+	"May",
+	"June",
+	"July",
+	"August",
+	"September",
+	"October",
+	"November",
+	"December",
+];
 
 async function getPostsFromThreads(threads) {
 	const posts = [];
@@ -110,41 +125,39 @@ function chunkArray(array, chunkSize) {
 	return chunks;
 }
 
+function getCurrentAndNextMonthIndices() {
+	const now = new Date();
+	const currentMonthIdx = now.getMonth(); // 0-based
+	const nextMonthIdx = (currentMonthIdx + 1) % 12;
+	return [currentMonthIdx, nextMonthIdx];
+}
+
+function getMonthChoices() {
+	const [currentIdx, nextIdx] = getCurrentAndNextMonthIndices();
+	const uniqueMonths = [
+		MONTHS[nextIdx],
+		MONTHS[currentIdx],
+		...MONTHS.filter((m, idx) => idx !== currentIdx && idx !== nextIdx),
+	];
+	return uniqueMonths.map((month) => ({ name: month, value: month }));
+}
+
 export const data = new SlashCommandBuilder()
 	.setName("create_ballot")
 	.setDescription("Creates a ballot for the current month's submissions.")
 	.addStringOption((option) =>
 		option
 			.setName("month")
-			.setDescription("The to look for submissions for.")
+			.setDescription("The month to look for submissions for.")
 			.setRequired(true)
-			.addChoices(
-				{ name: "January", value: "January" },
-				{ name: "February", value: "February" },
-				{ name: "March", value: "March" },
-				{ name: "April", value: "April" },
-				{ name: "May", value: "May" },
-				{ name: "June", value: "June" },
-				{ name: "July", value: "July" },
-				{ name: "August", value: "August" },
-				{ name: "September", value: "September" },
-				{ name: "October", value: "October" },
-				{ name: "November", value: "November" },
-				{ name: "December", value: "December" },
-			),
+			.addChoices(getMonthChoices()),
 	)
 	.addIntegerOption((option) =>
 		option
 			.setName("year")
 			.setDescription("The year to look for submissions for.")
 			.setRequired(true)
-			.setMinValue(CURRENT_YEAR - 5)
-			.setMaxValue(CURRENT_YEAR + 5)
 			.addChoices(
-				{
-					name: String(CURRENT_YEAR - 1),
-					value: CURRENT_YEAR - 1,
-				},
 				{
 					name: String(CURRENT_YEAR),
 					value: CURRENT_YEAR,
@@ -167,10 +180,23 @@ export const data = new SlashCommandBuilder()
 		option
 			.setName("ttl")
 			.setDescription(
-				"Time (in minutes) until the ballot closes and tabulates the results. Default: 1440 (24 hours).",
+				"Time until the ballot closes and tabulates the results. Default: 24 hours.",
 			)
-			.setRequired(false),
-	);
+			.setRequired(false)
+			.addChoices(
+				{ name: "1 minute", value: 1 },
+				{ name: "5 minutes", value: 5 },
+				{ name: "15 minutes", value: 15 },
+				{ name: "30 minutes", value: 30 },
+				{ name: "1 hour", value: 60 },
+				{ name: "3 hours", value: 60 * 3 },
+				{ name: "6 hours", value: 60 * 6 },
+				{ name: "12 hours", value: 60 * 12 },
+				{ name: "24 hours", value: 60 * 24 },
+				{ name: "48 hours", value: 60 * 48 },
+			),
+	)
+	.setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
 
 export async function execute(interaction) {
 	await interaction.deferReply();
@@ -259,7 +285,7 @@ export async function execute(interaction) {
 			true,
 			postChunks.length === 1,
 		),
-		allowedMentions: { parse: [] },
+		allowedMentions: { roles: [PARTICIPANT_ROLE_ID] },
 	});
 
 	for (let i = 1; i < postChunks.length; i++) {

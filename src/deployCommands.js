@@ -3,6 +3,9 @@ import { fileURLToPath } from "node:url";
 
 import fs from "node:fs";
 import path from "node:path";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
@@ -42,7 +45,6 @@ const commandFolders = fs.readdirSync(foldersPath);
 			`Started refreshing ${commands.length} application (/) commands.`,
 		);
 
-		// The put method is used to fully refresh all commands in the guild with the current set
 		const data = await rest.put(
 			Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
 			{ body: commands },
@@ -50,7 +52,6 @@ const commandFolders = fs.readdirSync(foldersPath);
 
 		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
 	} catch (error) {
-		// And of course, make sure you catch and log any errors!
 		console.error(error);
 	}
 })();

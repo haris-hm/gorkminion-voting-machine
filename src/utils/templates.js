@@ -7,6 +7,8 @@ import {
 	TextDisplayBuilder,
 } from "discord.js";
 
+const PARTICIPANT_ROLE_ID = process.env.PARTICIPANT_ROLE_ID;
+
 function joinLines(lines) {
 	return lines.join("\n");
 }
@@ -18,8 +20,11 @@ export function votingProcessIntro(
 ) {
 	const content = [
 		"## Voting Process",
+		"Please read through these instructions carefully before proceeding.",
 		"",
-		`You can vote for up to **${votesAvailable}** options in this ballot. You will rank your choices from 1 to ${votesAvailable}. Your number 1 choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point. Note that you cannot uncast a vote once it has been submitted, so please choose wisely!`,
+		`You can vote for up to **${votesAvailable}** options in this ballot. You will rank your choices from 1 to ${votesAvailable}. Your number 1 choice will receive ${votesAvailable} points. Subsequent choices will receive a diminishing amount of points until the last choice, which will receive 1 point. Please note that you cannot uncast a vote once it has been submitted, so please choose wisely!`,
+		"",
+		"Also, there may be multiple pages of options to vote for so, please ensure you navigate through all pages to see all available options. It's recommended to look at the ballot prior to proceeding, just so you have an idea of all the options available.",
 		"",
 		"When you're ready, please click the start button below to begin the voting process.",
 	];
@@ -64,7 +69,7 @@ export function ballotIntro(month, year, continuation = false) {
 	const content = [
 		`## 🗳️ ${month} ${year} Server Icon Ballot`,
 		"",
-		"It's time to vote for your favorite icons! Here are all the submissions of this month:",
+		`<@&${PARTICIPANT_ROLE_ID}>, it's time to vote for your favorite icons! Here are all the submissions of this month:`,
 		"",
 	];
 
@@ -111,7 +116,7 @@ export function winnersDisplay(month, year) {
 	const content = [
 		`## 🏆 Winners for ${month} ${year} 🏆`,
 		"",
-		"It's time to reveal the winners of this month's icon ballot! Here are the top icons that received the highest votes:",
+		`Alright <@&${PARTICIPANT_ROLE_ID}>, it's time to reveal the winners of this month's icon ballot! Here are the top icons that received the highest votes:`,
 		"",
 	];
 
